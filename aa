@@ -1,0 +1,138 @@
+<?php
+session_start();
+include('db_config.php');
+
+if ($_SESSION['role'] !== 'user') {
+    header("Location: login.php");
+    exit();
+}
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $category_id = $_POST['category_id']; // Get category ID
+    $score = 0;
+    $user_id = $_SESSION['user_id'];
+
+    // Calculate the score
+    foreach ($_POST as $question_id => $answer) {
+        if ($question_id == 'category_id' || $question_id == 'submit') continue;
+        $question_result = $conn->query("SELECT * FROM questions WHERE id = " . substr($question_id, 1));
+        $question = $question_result->fetch_assoc();
+
+        if ($answer == $question['correct_option']) {
+            $score++;
+        }
+    }
+
+    // Check if user already has a score in this category
+    $existing_score_query = $conn->query("SELECT score FROM scores WHERE user_id = $user_id AND category_id = $category_id");
+    $existing_score = $existing_score_query->fetch_assoc();
+
+    if ($existing_score) {
+        if ($score > $existing_score['score']) {
+            $conn->query("UPDATE scores SET score = $score WHERE user_id = $user_id AND category_id = $category_id");
+        }
+    } else {
+        $conn->query("INSERT INTO scores (user_id, category_id, score) VALUES ($user_id, $category_id, $score)");
+    }
+} else {
+    $category_id = $_GET['category_id'];
+}
+
+// Fetch leaderboard data
+$leaderboard_query = $conn->query("
+    SELECT users.name, scores.score 
+    FROM scores 
+    JOIN users ON scores.user_id = users.id 
+    WHERE scores.category_id = $category_id
+    ORDER BY scores.score DESC
+");
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Leaderboard</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .leaderboard-container {
+            width: 60%;
+            margin: auto;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #007bff;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .back-btn {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+
+        .back-btn:hover {
+            background-color: #0056b3;
+        }
+
+        .score-message {
+            font-size: 20px;
+            font-weight: bold;
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <div class="leaderboard-container">
+        <h2>Leaderboard</h2>
+
+        <?php if (isset($score)) { ?>
+            <p class="score-message">Your score is: <?= $score ?></p>
+        <?php } ?>
+
+        <table>
+            <tr>
+                <th>Rank</th>
+                <th>Name</th>
+                <th>Score</th>
+            </tr>
+            <?php 
+            $rank = 1;
+            while ($row = $leaderboard_query->fetch_assoc()) { ?>
+                <tr>
+                    <td><?= $rank++ ?></td>
+                    <td><?= htmlspecialchars($row['name']) ?></td>
+                    <td><?= $row['score'] ?></td>
+                </tr>
+            <?php } ?>
+        </table>
+        
+        <a href="quiz_selection.php" class="back-btn">Back to Quizzes</a>
+    </div>
+</body>
+</html>
