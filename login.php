@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['role'] = $user['role'];
 
-            if ($user['role'] == 'admin') {
+            if ($user['role'] == 'teacher') {
                 header("Location: admin_panel.php"); // Redirect admin to admin panel
             } else {
                 header("Location: quiz_selection.php"); // Redirect user to quiz selection
