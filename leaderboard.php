@@ -2,7 +2,15 @@
 session_start();
 include('db_config.php');
 
+// Ensure only admin (teacher) can access this page
+if ($_SESSION['role'] !== 'admin') {
+    header("Location: login.php");
+    exit();
+}
+
 $category_id = $_GET['category_id']; // Get category from URL
+
+// Fetch leaderboard data
 $leaderboard_query = $conn->query("
     SELECT users.name, scores.score 
     FROM scores 
@@ -10,7 +18,6 @@ $leaderboard_query = $conn->query("
     WHERE scores.category_id = $category_id
     ORDER BY scores.score DESC
 ");
-
 ?>
 
 <!DOCTYPE html>
@@ -39,7 +46,7 @@ $leaderboard_query = $conn->query("
                 </tr>
             <?php } ?>
         </table>
-        <a href="quiz_selection.php" class="back-btn">Back to Quizzes</a>
+        <a href="admin_panel.php" class="back-btn">Back to Teacher Panel</a>
     </div>
 </body>
 </html>

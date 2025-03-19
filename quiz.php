@@ -12,7 +12,7 @@ if ($_SESSION['role'] !== 'user') {
 if (!isset($_GET['category_id'])) {
     die("Error: Category ID not provided.");
 }
-$category_id = $_GET['category_id'];
+$category_id = intval($_GET['category_id']);
 
 // Fetch questions for the selected category
 $sql = "SELECT * FROM questions WHERE category_id = ? ORDER BY id ASC";
@@ -22,7 +22,12 @@ $stmt->execute();
 $result = $stmt->get_result();
 $questions = $result->fetch_all(MYSQLI_ASSOC);
 
-// Initialize session variables
+// Check if there are questions for the category
+if (empty($questions)) {
+    die("No questions found for this category.");
+}
+
+// Initialize session variables for the quiz
 if (!isset($_SESSION['question_index'])) {
     $_SESSION['question_index'] = 0;
     $_SESSION['score'] = 0;
@@ -31,7 +36,7 @@ if (!isset($_SESSION['question_index'])) {
 
 // Check if form is submitted
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $selected_answer = $_POST['answer'];
+    $selected_answer = intval($_POST['answer']);
     $current_index = $_SESSION['question_index'];
 
     // Check if answer is correct

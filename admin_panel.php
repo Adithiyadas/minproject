@@ -2,8 +2,8 @@
 session_start();
 include('db_config.php');
 
-// Ensure only admin can access this page
-if ($_SESSION['role'] !== 'teacher') {
+// Ensure only admin (teacher) can access this page
+if ($_SESSION['role'] !== 'admin') {
     header("Location: login.php");
     exit();
 }
@@ -104,13 +104,43 @@ if (isset($_POST['view_category'])) {
         $error_message = "Invalid password or unauthorized access.";
     }
 }
+
+// Handle leaderboard display for a specific category
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['view_leaderboard'])) {
+    $category_id = intval($_POST['view_leaderboard']);
+    $password = $_POST['password'];
+
+    // Verify category ownership and password
+    $category_check = $conn->prepare("SELECT * FROM categories WHERE id = ? AND category_owner = ?");
+    $category_check->bind_param("ii", $category_id, $admin_id);
+    $category_check->execute();
+    $category_check_result = $category_check->get_result();
+    $category = $category_check_result->fetch_assoc();
+
+    if ($category && password_verify($password, $category['password'])) {
+        // Fetch leaderboard data
+        $leaderboard_query = $conn->prepare("
+            SELECT users.name, scores.score 
+            FROM scores 
+            JOIN users ON scores.user_id = users.id 
+            WHERE scores.category_id = ? 
+            ORDER BY scores.score DESC 
+            LIMIT 10
+        ");
+        $leaderboard_query->bind_param("i", $category_id);
+        $leaderboard_query->execute();
+        $leaderboard_result = $leaderboard_query->get_result();
+    } else {
+        $error_message = "Invalid password or unauthorized access.";
+    }
+}
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Panel</title>
+    <title>Teacher Panel</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -167,6 +197,11 @@ if (isset($_POST['view_category'])) {
                                 <input type="password" name="password" placeholder="Enter Password" required>
                                 <button type="submit">View Questions</button>
                             </form>
+                            <form method="POST" style="display:inline;">
+                                <input type="hidden" name="view_leaderboard" value="<?= $category['id'] ?>">
+                                <input type="password" name="password" placeholder="Enter Password" required>
+                                <button type="submit">View Leaderboard</button>
+                            </form>
                         </td>
                     </tr>
                 <?php } ?>
@@ -176,7 +211,6 @@ if (isset($_POST['view_category'])) {
         <!-- Display Questions if Selected -->
         <?php if (isset($questions_result)) { ?>
             <h3>Questions for your Category <?= isset($category['name']) ? htmlspecialchars($category['name']) : '' ?></h3>
-
             <table>
                 <thead>
                     <tr>
@@ -202,6 +236,32 @@ if (isset($_POST['view_category'])) {
                 </tbody>
             </table>
         <?php } ?>
+
+        <!-- Display Leaderboard if Selected -->
+    
+            <?php if (isset($leaderboard_result)) { ?>
+    <h3>Leaderboard for <?= isset($category) && isset($category['name']) ? htmlspecialchars($category['name']) : 'Unknown Category' ?></h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Name</th>
+                <th>Score</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php 
+            $rank = 1;
+            while ($row = $leaderboard_result->fetch_assoc()) { ?>
+                <tr>
+                    <td><?= $rank++ ?></td>
+                    <td><?= htmlspecialchars($row['name']) ?></td>
+                    <td><?= $row['score'] ?></td>
+                </tr>
+            <?php } ?>
+        </tbody>
+    </table>
+<?php } ?>
     </div>
 </body>
 </html>
