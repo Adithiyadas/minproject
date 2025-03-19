@@ -2,22 +2,30 @@
 session_start();
 include('db_config.php');
 
-// Ensure only admin (teacher) can access this page
+// Ensure only authorized users (e.g., teachers) can access this page
 if ($_SESSION['role'] !== 'admin') {
     header("Location: login.php");
     exit();
 }
 
-$category_id = $_GET['category_id']; // Get category from URL
+// Get the category ID from the URL
+if (!isset($_GET['category_id'])) {
+    die("Error: Category ID not provided.");
+}
+$category_id = intval($_GET['category_id']);
 
-// Fetch leaderboard data
-$leaderboard_query = $conn->query("
-    SELECT users.name, scores.score 
-    FROM scores 
-    JOIN users ON scores.user_id = users.id 
-    WHERE scores.category_id = $category_id
-    ORDER BY scores.score DESC
+// Fetch the highest scores for the category
+$leaderboard_query = $conn->prepare("
+    SELECT users.name, MAX(scores.score) AS highest_score
+    FROM scores
+    JOIN users ON scores.user_id = users.id
+    WHERE scores.category_id = ?
+    GROUP BY scores.user_id
+    ORDER BY highest_score DESC
 ");
+$leaderboard_query->bind_param("i", $category_id);
+$leaderboard_query->execute();
+$leaderboard_result = $leaderboard_query->get_result();
 ?>
 
 <!DOCTYPE html>
@@ -34,15 +42,15 @@ $leaderboard_query = $conn->query("
             <tr>
                 <th>Rank</th>
                 <th>Name</th>
-                <th>Score</th>
+                <th>Highest Score</th>
             </tr>
             <?php 
             $rank = 1;
-            while ($row = $leaderboard_query->fetch_assoc()) { ?>
+            while ($row = $leaderboard_result->fetch_assoc()) { ?>
                 <tr>
                     <td><?= $rank++ ?></td>
                     <td><?= htmlspecialchars($row['name']) ?></td>
-                    <td><?= $row['score'] ?></td>
+                    <td><?= $row['highest_score'] ?></td>
                 </tr>
             <?php } ?>
         </table>

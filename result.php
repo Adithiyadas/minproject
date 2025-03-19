@@ -14,14 +14,19 @@ $total = $_SESSION['question_index'];
 $category_id = $_SESSION['category_id']; // Get the category ID from the session
 $user_id = $_SESSION['user_id']; // Get the user ID from the session
 
-// Insert the score into the database
+// Insert or update the score in the database
 $stmt = $conn->prepare("
     INSERT INTO scores (user_id, category_id, score) 
     VALUES (?, ?, ?) 
     ON DUPLICATE KEY UPDATE score = GREATEST(score, VALUES(score))
 ");
 $stmt->bind_param("iii", $user_id, $category_id, $score);
-$stmt->execute();
+
+if ($stmt->execute()) {
+    echo "Score inserted/updated successfully!";
+} else {
+    echo "Error: " . $stmt->error;
+}
 $stmt->close();
 
 // Reset quiz-related session variables

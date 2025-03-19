@@ -34,6 +34,51 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['category'])) {
     }
 }
 
+// Handle category deletion
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['delete_category'])) {
+    $category_id = intval($_POST['delete_category']);
+    $password = trim($_POST['category_password']);
+    
+    // Verify category ownership and password
+    $category_check = $conn->prepare("SELECT * FROM categories WHERE id = ? AND category_owner = ?");
+    $category_check->bind_param("ii", $category_id, $admin_id);
+    $category_check->execute();
+    $category_check_result = $category_check->get_result();
+    $category = $category_check_result->fetch_assoc();
+    
+    if ($category && password_verify($password, $category['password'])) {
+        // Start a transaction to ensure data integrity
+        $conn->begin_transaction();
+        
+        try {
+            // First delete all questions in the category
+            $delete_questions = $conn->prepare("DELETE FROM questions WHERE category_id = ?");
+            $delete_questions->bind_param("i", $category_id);
+            $delete_questions->execute();
+            
+            // Then delete all scores for the category
+            $delete_scores = $conn->prepare("DELETE FROM scores WHERE category_id = ?");
+            $delete_scores->bind_param("i", $category_id);
+            $delete_scores->execute();
+            
+            // Finally delete the category itself
+            $delete_category = $conn->prepare("DELETE FROM categories WHERE id = ? AND category_owner = ?");
+            $delete_category->bind_param("ii", $category_id, $admin_id);
+            $delete_category->execute();
+            
+            // Commit the transaction
+            $conn->commit();
+            $success_message = "Category deleted successfully!";
+        } catch (Exception $e) {
+            // Rollback in case of error
+            $conn->rollback();
+            $error_message = "Error deleting category: " . $e->getMessage();
+        }
+    } else {
+        $error_message = "Invalid password or unauthorized access.";
+    }
+}
+
 // Handle question addition
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['question_text'])) {
     $question_text = trim($_POST['question_text']);
@@ -192,7 +237,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['view_leaderboard'])) {
                     <tr>
                         <td><?= htmlspecialchars($category['name']) ?></td>
                         <td>
-                            <form method="POST">
+                            <form method="POST" style="display:inline;">
                                 <input type="hidden" name="view_category" value="<?= $category['id'] ?>">
                                 <input type="password" name="password" placeholder="Enter Password" required>
                                 <button type="submit">View Questions</button>
@@ -201,6 +246,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['view_leaderboard'])) {
                                 <input type="hidden" name="view_leaderboard" value="<?= $category['id'] ?>">
                                 <input type="password" name="password" placeholder="Enter Password" required>
                                 <button type="submit">View Leaderboard</button>
+                            </form>
+                            <form method="POST" style="display:inline;">
+                                <input type="hidden" name="delete_category" value="<?= $category['id'] ?>">
+                                <input type="password" name="category_password" placeholder="Enter Password" required>
+                                <button type="submit" onclick="return confirm('Are you sure you want to delete this category? This will also delete all questions and scores related to this category.')">Delete Category</button>
                             </form>
                         </td>
                     </tr>
@@ -238,30 +288,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['view_leaderboard'])) {
         <?php } ?>
 
         <!-- Display Leaderboard if Selected -->
-    
-            <?php if (isset($leaderboard_result)) { ?>
-    <h3>Leaderboard for <?= isset($category) && isset($category['name']) ? htmlspecialchars($category['name']) : 'Unknown Category' ?></h3>
-    <table>
-        <thead>
-            <tr>
-                <th>Rank</th>
-                <th>Name</th>
-                <th>Score</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php 
-            $rank = 1;
-            while ($row = $leaderboard_result->fetch_assoc()) { ?>
-                <tr>
-                    <td><?= $rank++ ?></td>
-                    <td><?= htmlspecialchars($row['name']) ?></td>
-                    <td><?= $row['score'] ?></td>
-                </tr>
-            <?php } ?>
-        </tbody>
-    </table>
-<?php } ?>
+        <?php if (isset($leaderboard_result)) { ?>
+            <h3>Leaderboard for <?= isset($category) && isset($category['name']) ? htmlspecialchars($category['name']) : 'Unknown Category' ?></h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Name</th>
+                        <th>Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php 
+                    $rank = 1;
+                    while ($row = $leaderboard_result->fetch_assoc()) { ?>
+                        <tr>
+                            <td><?= $rank++ ?></td>
+                            <td><?= htmlspecialchars($row['name']) ?></td>
+                            <td><?= $row['score'] ?></td>
+                        </tr>
+                    <?php } ?>
+                </tbody>
+            </table>
+        <?php } ?>
     </div>
 </body>
 </html>
